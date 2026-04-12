@@ -3,7 +3,7 @@
 # This file defines the interactive game entities and their local behaviors.
 
 import math
-from random import uniform
+from random import random, uniform, choice
 
 import pygame as pg
 
@@ -67,6 +67,7 @@ class Asteroid(pg.sprite.Sprite):
         self.vel = Vec(vel)
         self.size = size
         self.r = C.AST_SIZES[size]["r"]
+        self.volatile = random() < C.VOLATILE_CHANCE
         self.poly = self._make_poly()
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
 
@@ -92,7 +93,8 @@ class Asteroid(pg.sprite.Sprite):
     def draw(self, surf: pg.Surface):
         # Draw the asteroid outline on the target surface.
         pts = [(self.pos + p) for p in self.poly]
-        pg.draw.polygon(surf, C.WHITE, pts, width=1)
+        color = C.RED if getattr(self, "volatile", False) else C.WHITE
+        pg.draw.polygon(surf, color, pts, width=1)
 
 
 class Ship(pg.sprite.Sprite):
@@ -107,6 +109,12 @@ class Ship(pg.sprite.Sprite):
         self.alive = True
         self.r = C.SHIP_RADIUS
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        
+        # New mechanics
+        self.dash_cool = 0.0
+        self.dash_active = 0.0
+        self.spread_timer = 0.0
+        self.has_shield = False
 
     def control(self, keys: pg.key.ScancodeWrapper, dt: float):
         # Apply rotation, thrust, and friction from the current input state.
@@ -118,21 +126,39 @@ class Ship(pg.sprite.Sprite):
             self.vel += angle_to_vec(self.angle) * C.SHIP_THRUST * dt
         self.vel *= C.SHIP_FRICTION
 
-    def fire(self) -> Bullet | None:
-        # Spawn a player bullet when the fire cooldown allows it.
+    def fire(self) -> list[Bullet]:
+        # Spawn player bullets when the fire cooldown allows it.
         if self.cool > 0:
-            return None
+            return []
+        
         dirv = angle_to_vec(self.angle)
         pos = self.pos + dirv * (self.r + 6)
-        vel = self.vel + dirv * C.SHIP_BULLET_SPEED
+        
+        bullets = []
+        if self.spread_timer > 0:
+            for offset_ang in [-15, 0, 15]:
+                d = angle_to_vec(self.angle + offset_ang)
+                vel = self.vel + d * C.SHIP_BULLET_SPEED
+                bullets.append(Bullet(pos, vel))
+        else:
+            vel = self.vel + dirv * C.SHIP_BULLET_SPEED
+            bullets.append(Bullet(pos, vel))
+            
         self.cool = C.SHIP_FIRE_RATE
-        return Bullet(pos, vel)
+        return bullets
 
-    def hyperspace(self):
-        # Teleport the ship to a random location and reset its momentum.
-        self.pos = Vec(uniform(0, C.WIDTH), uniform(0, C.HEIGHT))
-        self.vel.xy = (0, 0)
-        self.invuln = 1.0
+    def dash(self) -> bool:
+        # Dash forward with invulnerability
+        if self.dash_cool <= 0:
+            self.dash_active = getattr(C, "DASH_DURATION", 0.25)
+            self.dash_cool = getattr(C, "DASH_COOLDOWN", 2.0)
+            dirv = angle_to_vec(self.angle)
+            
+            val_speed = getattr(C, "DASH_SPEED", C.SHIP_THRUST * getattr(C, "DASH_SPEED_MULT", 3.5)) * 1.6
+            self.vel = dirv * val_speed
+            self.invuln = self.dash_active
+            return True
+        return False
 
     def update(self, dt: float):
         # Advance cooldowns, move the ship, and wrap it on screen.
@@ -140,6 +166,21 @@ class Ship(pg.sprite.Sprite):
             self.cool -= dt
         if self.invuln > 0:
             self.invuln -= dt
+            
+        if self.dash_cool > 0:
+            self.dash_cool -= dt
+        if self.dash_active > 0:
+            self.dash_active -= dt
+            if self.dash_active <= 0:
+                # Brake dramatically so we don't crash after dash
+                if self.vel.length() > C.SHIP_THRUST:
+                    self.vel = self.vel.normalize() * (C.SHIP_THRUST * 0.5)
+                # Give a brief invulnerability window after dash ends
+                self.invuln = 0.4
+            
+        if self.spread_timer > 0:
+            self.spread_timer -= dt
+            
         self.pos += self.vel * dt
         self.pos = wrap_pos(self.pos)
         self.rect.center = self.pos
@@ -155,6 +196,9 @@ class Ship(pg.sprite.Sprite):
         draw_poly(surf, [p1, p2, p3])
         if self.invuln > 0 and int(self.invuln * 10) % 2 == 0:
             draw_circle(surf, self.pos, self.r + 6)
+            
+        if self.has_shield:
+            pg.draw.circle(surf, C.BLUE, self.pos, self.r + 10, width=2)
 
 
 class UFO(pg.sprite.Sprite):
@@ -204,3 +248,59 @@ class UFO(pg.sprite.Sprite):
         cup = pg.Rect(0, 0, w * 0.5, h * 0.7)
         cup.center = (self.pos.x, self.pos.y - h * 0.3)
         pg.draw.ellipse(surf, C.WHITE, cup, width=1)
+
+
+class PowerUp(pg.sprite.Sprite):
+    def __init__(self, pos: Vec):
+        super().__init__()
+        self.pos = Vec(pos)
+        self.type = choice(["SHIELD", "SPREAD"])
+        self.r = 10
+        self.ttl = C.POWERUP_TTL
+        self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+
+    def update(self, dt: float):
+        self.ttl -= dt
+        if self.ttl <= 0:
+            self.kill()
+        self.rect.center = self.pos
+
+    def draw(self, surf: pg.Surface):
+        color = C.BLUE if self.type == "SHIELD" else C.GREEN
+        pg.draw.circle(surf, color, self.pos, self.r, width=2)
+
+
+class Anomaly(pg.sprite.Sprite):
+    def __init__(self, pos: Vec):
+        super().__init__()
+        self.pos = Vec(pos)
+        self.max_r = C.ANOMALY_HORIZON_R
+        self.r = 1.0  # Começa pequena
+        self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        self.time = 0.0
+        self.ttl = 15.0  # Vive por 15 segundos
+
+    def update(self, dt: float):
+        self.time += dt
+        self.ttl -= dt
+        
+        # Cresce lenta e constantemente nos primeiros 8.0 segundos
+        if self.time < 8.0:
+            self.r = 1.0 + (self.max_r - 1.0) * (self.time / 8.0)
+        # Encolhe suavemente no último 1 segundo
+        elif self.ttl < 1.0:
+            self.r = max(0.1, self.max_r * self.ttl)
+        else:
+            self.r = self.max_r
+            
+        if self.ttl <= 0:
+            self.kill()
+            
+        self.rect.width = self.r * 2
+        self.rect.height = self.r * 2
+        self.rect.center = self.pos
+
+    def draw(self, surf: pg.Surface):
+        if self.r > 2.0:
+            r_pulse = self.r + math.sin(self.time * 5.0) * 3.0
+            pg.draw.circle(surf, C.PURPLE, self.pos, max(1, int(r_pulse)), width=2)

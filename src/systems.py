@@ -3,12 +3,12 @@
 # This file coordinates world state, spawning, collisions, scoring, and progression.
 
 import math
-from random import uniform
+from random import uniform, random, choice
 
 import pygame as pg
 
 import config as C
-from sprites import Asteroid, Ship, UFO
+from sprites import Asteroid, Ship, UFO, PowerUp, Anomaly, UfoBullet
 from utils import Vec, rand_edge_pos, rand_unit_vec
 
 
@@ -20,7 +20,14 @@ class World:
         self.ufo_bullets = pg.sprite.Group()
         self.asteroids = pg.sprite.Group()
         self.ufos = pg.sprite.Group()
+        self.powerups = pg.sprite.Group()
+        self.anomalies = pg.sprite.Group()
         self.all_sprites = pg.sprite.Group(self.ship)
+        self.anomaly_timer = uniform(15.0, 30.0)
+        self.combo = 0
+        self.combo_timer = 0.0
+        self.dash_uses = 0
+        
         self.score = 0
         self.lives = C.START_LIVES
         self.wave = 0
@@ -32,6 +39,7 @@ class World:
     def start_wave(self):
         # Spawn a new asteroid wave with difficulty based on the current round.
         self.wave += 1
+        self.ship.has_shield = False
         count = 3 + self.wave
         for _ in range(count):
             pos = rand_edge_pos()
@@ -72,15 +80,18 @@ class World:
         # Fire a player bullet when the bullet cap allows it.
         if len(self.bullets) >= C.MAX_BULLETS:
             return
-        b = self.ship.fire()
-        if b:
+        bullets = self.ship.fire()
+        for b in bullets:
             self.bullets.add(b)
             self.all_sprites.add(b)
 
-    def hyperspace(self):
-        # Trigger the ship hyperspace action and apply its score penalty.
-        self.ship.hyperspace()
-        self.score = max(0, self.score - C.HYPERSPACE_COST)
+    def dash(self):
+        # Trigger the directional dash if points available.
+        cost = getattr(C, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
+        if self.score >= cost:
+            if self.ship.dash():
+                self.score -= cost
+                self.dash_uses += 1
 
     def update(self, dt: float, keys):
         # Update the world simulation, timers, enemy behavior, and progression.
@@ -89,6 +100,12 @@ class World:
         if self.safe > 0:
             self.safe -= dt
             self.ship.invuln = 0.5
+            
+        if self.combo_timer > 0:
+            self.combo_timer -= dt
+            if self.combo_timer <= 0:
+                self.combo = 0
+                
         if self.ufos:
             self.ufo_try_fire()
         else:
@@ -97,6 +114,20 @@ class World:
             self.spawn_ufo()
             self.ufo_timer = C.UFO_SPAWN_EVERY
 
+        # Gravity logic
+        for anomaly in self.anomalies:
+            for spr in list(self.all_sprites):
+                if spr == anomaly:
+                    continue
+                diff = anomaly.pos - spr.pos
+                dist_sq = diff.length_squared()
+                if dist_sq > 0:
+                    # O poder gravitacional escala de acordo com o tamanho atual da anomalia
+                    scale_factor = anomaly.r / 10.0
+                    force = (C.ANOMALY_GRAVITY_PULL * scale_factor) / dist_sq
+                    if hasattr(spr, "vel"):
+                        spr.vel += diff.normalize() * force * dt
+
         self.handle_collisions()
 
         if not self.asteroids and self.wave_cool <= 0:
@@ -104,8 +135,47 @@ class World:
             self.wave_cool = C.WAVE_DELAY
         elif not self.asteroids:
             self.wave_cool -= dt
+            
+        if self.wave >= C.ANOMALY_SPAWN_WAVE:
+            self.anomaly_timer -= dt
+            if self.anomaly_timer <= 0:
+                pos = Vec(uniform(200, C.WIDTH-200), uniform(200, C.HEIGHT-200))
+                an = Anomaly(pos)
+                self.anomalies.add(an)
+                self.all_sprites.add(an)
+                self.anomaly_timer = uniform(15.0, 30.0)
 
     def handle_collisions(self):
+        # PowerUp collisions with ship
+        if self.ship.alive:
+            for p in list(self.powerups):
+                if (p.pos - self.ship.pos).length() < (p.r + self.ship.r):
+                    if p.type == "SHIELD":
+                        self.ship.has_shield = True
+                    elif p.type == "SPREAD":
+                        self.ship.spread_timer = C.POWERUP_SPREAD_DURATION
+                    p.kill()
+
+        # Anomaly eating logic
+        for anomaly in list(self.anomalies):
+            if not anomaly.alive():
+                continue
+            for spr in list(self.all_sprites):
+                if spr == anomaly:
+                    continue
+                if (spr.pos - anomaly.pos).length() < anomaly.r:
+                    if spr == self.ship:
+                        hit = True
+                        if self.ship.has_shield:
+                            self.ship.has_shield = False
+                            self.ship.invuln = 1.0
+                            # Jump slightly away to not get stuck
+                            self.ship.pos += (self.ship.pos - anomaly.pos).normalize() * 50
+                        else:
+                            self.ship_die()
+                    elif not isinstance(spr, Anomaly):
+                        spr.kill()
+
         # Resolve collisions between bullets, asteroids, UFOs, and the ship.
         hits = pg.sprite.groupcollide(
             self.asteroids,
@@ -128,39 +198,71 @@ class World:
             self.split_asteroid(ast)
 
         if self.ship.invuln <= 0 and self.safe <= 0:
+            hit = False
             for ast in self.asteroids:
                 if (ast.pos - self.ship.pos).length() < (ast.r + self.ship.r):
-                    self.ship_die()
+                    hit = True
                     break
-            for ufo in self.ufos:
-                if (ufo.pos - self.ship.pos).length() < (ufo.r + self.ship.r):
+            if not hit:
+                for ufo in self.ufos:
+                    if (ufo.pos - self.ship.pos).length() < (ufo.r + self.ship.r):
+                        hit = True
+                        break
+            if not hit:
+                for bullet in self.ufo_bullets:
+                    if (bullet.pos - self.ship.pos).length() < (bullet.r + self.ship.r):
+                        bullet.kill()
+                        hit = True
+                        break
+
+            if hit:
+                if self.ship.has_shield:
+                    self.ship.has_shield = False
+                    self.ship.invuln = 1.0
+                else:
                     self.ship_die()
-                    break
-            for bullet in self.ufo_bullets:
-                if (bullet.pos - self.ship.pos).length() < (bullet.r + self.ship.r):
-                    bullet.kill()
-                    self.ship_die()
-                    break
 
         for ufo in list(self.ufos):
             for b in list(self.bullets):
                 if (ufo.pos - b.pos).length() < (ufo.r + b.r):
+                    self.combo += 1
+                    self.combo_timer = C.COMBO_TIMEOUT
+                    mult = min(self.combo, C.MAX_MULTIPLIER)
+                    
                     score = (C.UFO_SMALL["score"] if ufo.small
                              else C.UFO_BIG["score"])
-                    self.score += score
+                    self.score += score * mult
                     ufo.kill()
                     b.kill()
 
     def split_asteroid(self, ast: Asteroid):
         # Destroy an asteroid, award score, and spawn its smaller fragments.
-        self.score += C.AST_SIZES[ast.size]["score"]
+        self.combo += 1
+        self.combo_timer = C.COMBO_TIMEOUT
+        multiplier = min(self.combo, C.MAX_MULTIPLIER)
+        
+        self.score += C.AST_SIZES[ast.size]["score"] * multiplier
         split = C.AST_SIZES[ast.size]["split"]
         pos = Vec(ast.pos)
+        
+        if getattr(ast, "volatile", False):
+            for _ in range(C.VOLATILE_PROJECTIONS):
+                dirv = rand_unit_vec()
+                b = UfoBullet(pos, dirv * C.VOLATILE_PROJ_SPEED)
+                self.ufo_bullets.add(b)
+                self.all_sprites.add(b)
+        else:
+            for s in split:
+                dirv = rand_unit_vec()
+                speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
+                self.spawn_asteroid(pos, dirv * speed, s)
+                
+        if random() < C.POWERUP_DROP_CHANCE and ast.size == "L":
+            p = PowerUp(pos)
+            self.powerups.add(p)
+            self.all_sprites.add(p)
+            
         ast.kill()
-        for s in split:
-            dirv = rand_unit_vec()
-            speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
-            self.spawn_asteroid(pos, dirv * speed, s)
 
     def ship_die(self):
         # Remove uma vida; sinaliza game over ou reposiciona a nave.
@@ -171,6 +273,7 @@ class World:
         self.ship.pos.xy = (C.WIDTH / 2, C.HEIGHT / 2)
         self.ship.vel.xy = (0, 0)
         self.ship.angle = -90
+        self.ship.spread_timer = 0.0
         self.ship.invuln = C.SAFE_SPAWN_TIME
         self.safe = C.SAFE_SPAWN_TIME
 
@@ -181,5 +284,21 @@ class World:
 
         pg.draw.line(surf, (60, 60, 60), (0, 50), (C.WIDTH, 50), width=1)
         txt = f"SCORE {self.score:06d}   LIVES {self.lives}   WAVE {self.wave}"
+        
+        # Display dash readiness and cost
+        cost = getattr(C, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
+        if self.ship.dash_cool > 0:
+            dash_status = f"{self.ship.dash_cool:.1f}s"
+        elif self.score < cost:
+            dash_status = f"NEED {cost}PTS"
+        else:
+            dash_status = f"READY (-{cost}PTS)"
+            
+        txt += f"   DASH: {dash_status}"
+        
+        if self.combo > 1:
+            mult = min(self.combo, C.MAX_MULTIPLIER)
+            txt += f"   COMBO x{mult}"
+            
         label = font.render(txt, True, C.WHITE)
         surf.blit(label, (10, 10))
