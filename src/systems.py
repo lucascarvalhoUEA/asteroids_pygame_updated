@@ -21,6 +21,8 @@ class World:
         self.asteroids = pg.sprite.Group()
         self.ufos = pg.sprite.Group()
         self.all_sprites = pg.sprite.Group(self.ship)
+        self.combo = 0
+        self.combo_timer = 0.0
         self.dash_uses = 0
         
         self.score = 0
@@ -94,6 +96,12 @@ class World:
         if self.safe > 0:
             self.safe -= dt
             self.ship.invuln = 0.5
+            
+        if self.combo_timer > 0:
+            self.combo_timer -= dt
+            if self.combo_timer <= 0:
+                self.combo = 0
+                
         if self.ufos:
             self.ufo_try_fire()
         else:
@@ -150,15 +158,23 @@ class World:
         for ufo in list(self.ufos):
             for b in list(self.bullets):
                 if (ufo.pos - b.pos).length() < (ufo.r + b.r):
+                    self.combo += 1
+                    self.combo_timer = C.COMBO_TIMEOUT
+                    mult = min(self.combo, C.MAX_MULTIPLIER)
+                    
                     score = (C.UFO_SMALL["score"] if ufo.small
                              else C.UFO_BIG["score"])
-                    self.score += score
+                    self.score += score * mult
                     ufo.kill()
                     b.kill()
 
     def split_asteroid(self, ast: Asteroid):
         # Destroy an asteroid, award score, and spawn its smaller fragments.
-        self.score += C.AST_SIZES[ast.size]["score"]
+        self.combo += 1
+        self.combo_timer = C.COMBO_TIMEOUT
+        multiplier = min(self.combo, C.MAX_MULTIPLIER)
+        
+        self.score += C.AST_SIZES[ast.size]["score"] * multiplier
         split = C.AST_SIZES[ast.size]["split"]
         pos = Vec(ast.pos)
         ast.kill()
@@ -198,5 +214,9 @@ class World:
             
         txt += f"   DASH: {dash_status}"
         
+        if self.combo > 1:
+            mult = min(self.combo, C.MAX_MULTIPLIER)
+            txt += f"   COMBO x{mult}"
+            
         label = font.render(txt, True, C.WHITE)
         surf.blit(label, (10, 10))
