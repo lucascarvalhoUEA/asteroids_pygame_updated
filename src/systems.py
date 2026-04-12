@@ -8,7 +8,7 @@ from random import uniform, random, choice
 import pygame as pg
 
 import config as C
-from sprites import Asteroid, Ship, UFO
+from sprites import Asteroid, Ship, UFO, PowerUp, Anomaly, UfoBullet
 from utils import Vec, rand_edge_pos, rand_unit_vec
 
 
@@ -20,6 +20,7 @@ class World:
         self.ufo_bullets = pg.sprite.Group()
         self.asteroids = pg.sprite.Group()
         self.ufos = pg.sprite.Group()
+        self.powerups = pg.sprite.Group()
         self.all_sprites = pg.sprite.Group(self.ship)
         self.combo = 0
         self.combo_timer = 0.0
@@ -36,6 +37,7 @@ class World:
     def start_wave(self):
         # Spawn a new asteroid wave with difficulty based on the current round.
         self.wave += 1
+        self.ship.has_shield = False
         count = 3 + self.wave
         for _ in range(count):
             pos = rand_edge_pos()
@@ -76,8 +78,8 @@ class World:
         # Fire a player bullet when the bullet cap allows it.
         if len(self.bullets) >= C.MAX_BULLETS:
             return
-        b = self.ship.fire()
-        if b:
+        bullets = self.ship.fire()
+        for b in bullets:
             self.bullets.add(b)
             self.all_sprites.add(b)
 
@@ -119,6 +121,16 @@ class World:
             self.wave_cool -= dt
 
     def handle_collisions(self):
+        # PowerUp collisions with ship
+        if self.ship.alive:
+            for p in list(self.powerups):
+                if (p.pos - self.ship.pos).length() < (p.r + self.ship.r):
+                    if p.type == "SHIELD":
+                        self.ship.has_shield = True
+                    elif p.type == "SPREAD":
+                        self.ship.spread_timer = C.POWERUP_SPREAD_DURATION
+                    p.kill()
+
         # Resolve collisions between bullets, asteroids, UFOs, and the ship.
         hits = pg.sprite.groupcollide(
             self.asteroids,
@@ -141,17 +153,28 @@ class World:
             self.split_asteroid(ast)
 
         if self.ship.invuln <= 0 and self.safe <= 0:
+            hit = False
             for ast in self.asteroids:
                 if (ast.pos - self.ship.pos).length() < (ast.r + self.ship.r):
-                    self.ship_die()
+                    hit = True
                     break
-            for ufo in self.ufos:
-                if (ufo.pos - self.ship.pos).length() < (ufo.r + self.ship.r):
-                    self.ship_die()
-                    break
-            for bullet in self.ufo_bullets:
-                if (bullet.pos - self.ship.pos).length() < (bullet.r + self.ship.r):
-                    bullet.kill()
+            if not hit:
+                for ufo in self.ufos:
+                    if (ufo.pos - self.ship.pos).length() < (ufo.r + self.ship.r):
+                        hit = True
+                        break
+            if not hit:
+                for bullet in self.ufo_bullets:
+                    if (bullet.pos - self.ship.pos).length() < (bullet.r + self.ship.r):
+                        bullet.kill()
+                        hit = True
+                        break
+
+            if hit:
+                if self.ship.has_shield:
+                    self.ship.has_shield = False
+                    self.ship.invuln = 1.0
+                else:
                     self.ship_die()
                     break
 
@@ -189,6 +212,13 @@ class World:
                 dirv = rand_unit_vec()
                 speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
                 self.spawn_asteroid(pos, dirv * speed, s)
+                
+        if random() < C.POWERUP_DROP_CHANCE and ast.size == "L":
+            p = PowerUp(pos)
+            self.powerups.add(p)
+            self.all_sprites.add(p)
+            
+        ast.kill()
 
     def ship_die(self):
         # Remove uma vida; sinaliza game over ou reposiciona a nave.
@@ -199,6 +229,7 @@ class World:
         self.ship.pos.xy = (C.WIDTH / 2, C.HEIGHT / 2)
         self.ship.vel.xy = (0, 0)
         self.ship.angle = -90
+        self.ship.spread_timer = 0.0
         self.ship.invuln = C.SAFE_SPAWN_TIME
         self.safe = C.SAFE_SPAWN_TIME
 

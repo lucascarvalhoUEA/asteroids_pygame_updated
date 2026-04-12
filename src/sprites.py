@@ -113,6 +113,8 @@ class Ship(pg.sprite.Sprite):
         # New mechanics
         self.dash_cool = 0.0
         self.dash_active = 0.0
+        self.spread_timer = 0.0
+        self.has_shield = False
 
     def control(self, keys: pg.key.ScancodeWrapper, dt: float):
         # Apply rotation, thrust, and friction from the current input state.
@@ -124,15 +126,26 @@ class Ship(pg.sprite.Sprite):
             self.vel += angle_to_vec(self.angle) * C.SHIP_THRUST * dt
         self.vel *= C.SHIP_FRICTION
 
-    def fire(self) -> Bullet | None:
-        # Spawn a player bullet when the fire cooldown allows it.
+    def fire(self) -> list[Bullet]:
+        # Spawn player bullets when the fire cooldown allows it.
         if self.cool > 0:
-            return None
+            return []
+        
         dirv = angle_to_vec(self.angle)
         pos = self.pos + dirv * (self.r + 6)
-        vel = self.vel + dirv * C.SHIP_BULLET_SPEED
+        
+        bullets = []
+        if self.spread_timer > 0:
+            for offset_ang in [-15, 0, 15]:
+                d = angle_to_vec(self.angle + offset_ang)
+                vel = self.vel + d * C.SHIP_BULLET_SPEED
+                bullets.append(Bullet(pos, vel))
+        else:
+            vel = self.vel + dirv * C.SHIP_BULLET_SPEED
+            bullets.append(Bullet(pos, vel))
+            
         self.cool = C.SHIP_FIRE_RATE
-        return Bullet(pos, vel)
+        return bullets
 
     def dash(self) -> bool:
         # Dash forward with invulnerability
@@ -165,6 +178,9 @@ class Ship(pg.sprite.Sprite):
                 # Give a brief invulnerability window after dash ends
                 self.invuln = 0.4
             
+        if self.spread_timer > 0:
+            self.spread_timer -= dt
+            
         self.pos += self.vel * dt
         self.pos = wrap_pos(self.pos)
         self.rect.center = self.pos
@@ -180,6 +196,9 @@ class Ship(pg.sprite.Sprite):
         draw_poly(surf, [p1, p2, p3])
         if self.invuln > 0 and int(self.invuln * 10) % 2 == 0:
             draw_circle(surf, self.pos, self.r + 6)
+            
+        if self.has_shield:
+            pg.draw.circle(surf, C.BLUE, self.pos, self.r + 10, width=2)
 
 
 class UFO(pg.sprite.Sprite):
@@ -229,3 +248,25 @@ class UFO(pg.sprite.Sprite):
         cup = pg.Rect(0, 0, w * 0.5, h * 0.7)
         cup.center = (self.pos.x, self.pos.y - h * 0.3)
         pg.draw.ellipse(surf, C.WHITE, cup, width=1)
+
+
+class PowerUp(pg.sprite.Sprite):
+    def __init__(self, pos: Vec):
+        super().__init__()
+        self.pos = Vec(pos)
+        self.type = choice(["SHIELD", "SPREAD"])
+        self.r = 10
+        self.ttl = C.POWERUP_TTL
+        self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+
+    def update(self, dt: float):
+        self.ttl -= dt
+        if self.ttl <= 0:
+            self.kill()
+        self.rect.center = self.pos
+
+    def draw(self, surf: pg.Surface):
+        color = C.BLUE if self.type == "SHIELD" else C.GREEN
+        pg.draw.circle(surf, color, self.pos, self.r, width=2)
+
+
