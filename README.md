@@ -6,22 +6,20 @@
 ---
 
 ## 📖 Sobre o Projeto
-O jogo original Asteroids foi um dos grandes sucessos da história dos videogames. Neste projeto, **Asteroids Atualizado**, nós reconstruímos aquele sentimento clássico da "tela infinita" (onde se você passa do limite esquerdo da tela, você sai pelo direito). No entanto, injetamos um ritmo muito mais frenético e criamos regras novas para deixar o jogo divertido e te forçar a tomar decisões rápidas o tempo todo!
+O jogo original Asteroids foi um dos grandes sucessos da história dos videogames. Neste projeto, **Asteroids Atualizado**, criamos um ritmo um pouco mais acelerado e mecânicas novas para deixar o jogo mais divertido e te forçar a tomar decisões mais rápidas o tempo todo!
 
 ## ✨ Novidades no Jogo (Features)
-A navegação continua fluida: você anda no "vácuo" do espaço deslizando livremente e precisa guiar sua nave com muito cuidado. Mas para deixar a experiência contemporânea, adicionamos 5 novas mecânicas de destaque:
+A navegação continua fluida: você navega no vácuo do espaço deslizando livremente e precisa guiar sua nave com muito cuidado. Mas, para deixar a experiência mais interessante, adicionamos 5 novas mecânicas de destaque:
 
-- 👾 **Inimigos Perigosos (UFOs):** Pequenos e grandes Discos Voadores cruzarão o mapa de tempos em tempos tentando destruir sua nave.
+- ⚡ **Arrancada de Emergência (Dash):** O antigo salto no hiperespaço sumiu. Agora, você pode acionar uma arrancada extrema para escapar rápido ou passar por asteroides sem sofrer dano nenhum por um curto momento. **Atenção:** Dar o dash consome uma parte de sua pontuação atual. Esse preço fica cada vez mais caro se você usar o dash repetidas vezes na mesma vida.
 
-- ⚡ **[NOVO] Arrancada de Emergência (Dash):** O antigo salto no hiperespaço sumiu. Agora, você pode acionar uma arrancada extrema para escapar rápido ou passar por asteroides sem sofrer dano nenhum por um curto momento. **Atenção:** Dar o Dash consome sua Pontuação Atual. Esse preço fica cada vez mais caro se você usar o Dash repetidas vezes na mesma "vida". Reflita antes de gastar sua pontuação inteira para sobreviver!
+- 🎯 **Combos e Multiplicação:** Quanto melhor você jogar, mais rápida sobe a sua pontuação. Destruir coisas em uma sequência veloz enche seu contador de Combo. Com sorte e precisão, você chegará no nível "x5", podendo ganhar até cinco vezes mais pontos!
 
-- 🎯 **[NOVO] Combos e Multiplicação:** Quanto melhor você jogar, mais rápida sobe a sua pontuação. Destruir coisas em uma sequência veloz enche seu contador de Combo. Com sorte e precisão, você chegará no nível "x5", podendo ganhar até cinco vezes mais pontos!
+- 🔴 **Asteróides Vermelhos:** Se ver uma grande rocha vermelha vindo em sua direção, fuja ou atire com muito cuidado. Elas não se quebram em pequenas pedrinhas como as normais. Quando destruídas, explodem jogando disparos de chumbo perigosos em 8 direções ao mesmo tempo. 
 
-- 🔴 **[NOVO] Asteróides Voláteis (Avermelhados):** Se ver uma grande rocha vermelha vindo em sua direção, fuja ou atire com muito cuidado. Elas não se quebram em pequenas pedrinhas como as normais. Quando destruídas, explodem jogando disparos de chumbo perigosos em 8 direções ao mesmo tempo. 
+- 🎁 **Itens Especiais (Power-Ups):** Ao quebrar asteroides de tamanho Grande, alguma recompensa solta pode flutuar rumo ao vácuo. Se você pegar a **Esfera Verde** você ativará um Tiro Triplo devastador por alguns segundos. Se for a **Esfera Azul**, sua nave ativará um Escudo. Ele aguenta exatamente **1 batida**, te salvando gratuitamente de perder de vez uma vida, mas lembre-se: ele é perdido sempre que você avança para uma nova onda. 
 
-- 🎁 **[NOVO] Itens Especiais (Power-Ups):** Ao quebrar asteroides de tamanho Grande, alguma recompensa solta pode flutuar rumo ao vácuo. Se você pegar a **Esfera Verde** você ativará um Tiro Triplo devastador por alguns segundos. Se for a **Esfera Azul**, sua nave ativará um Escudo. Ele aguenta exatamente **1 batida**, te salvando gratuitamente de perder de vez uma Vida — mas lembre-se: ele desliga sozinho sempre que você avança para uma Nova Onda. 
-
-- 🕳️ **[NOVO] Buracos Negros:** A partir da Onda 2, o espaço corre risco de se abrir. Um Buraco Negro começará pequeno, sugando com pouca força, mas irá encher e alargar a sua visão e perigo nos próximos 15 longos segundos atraindo os discos voadores inimigos, fragmentos de rocha rolando e os canhões dos seus próprios tiros direto pro fosso dele. Mantenha distância máxima!
+- 🕳️ **Buracos Negros:** A partir da Onda 2, o espaço corre risco de se abrir. Um Buraco Negro começará pequeno, sugando com pouca força, mas irá encher e alargar a sua visão e perigo nos próximos 15 longos segundos atraindo os discos voadores inimigos, fragmentos de rocha rolando e os canhões dos seus próprios tiros direto pro centro dele. Mantenha distância máxima!
 
 ## ⚙️ Pré-requisitos
 Para jogar na sua própria máquina, você precisará ter instalado:
@@ -47,7 +45,6 @@ Para iniciar sua "Run" e mergulhar para dentro das novas mecânicas de forma fun
    ```
 
 ## 🎮 Controles da Nave
-Sem truques e customizações. Esses são de fácil aprendizado:
 
 | Tecla de Teclado | Como usar a Navegaçao |
 | :--- | :--- |
@@ -58,10 +55,9 @@ Sem truques e customizações. Esses são de fácil aprendizado:
 | **Botão ESC (Esquerdo)** | Encerra o jogo instantanemamente. |
 
 ## 📁 Entendendo como a Pasta de Código foi montada
-Para você que estuda código, deixamos os arquivos bem separados e arrumados em uma hierarquia de funções:
-- **`config.py`**: Um arquivo central em formato focado que guarda cores, o quanto custa o Dash e o tempo do Power Up.
-- **`game.py`**: É o grande Maestro da Interface. O painel visual que entende se estamos perdidos no Menu ou na partida, etc.
-- **`main.py`**: O inicializador do Python, rodando o Pygame Window Display base.
-- **`sprites.py`**: As identidades de quem briga pelo espaço (Nave, Meteoros, Bolinhas Azuis/Verde, Tiros) estão configuradas nele com as animações.
-- **`systems.py`**: O Juiz do Universo. Ele faz os calculos e define toda hora que a Nave esbarrou no Asteroide vermelho ou tomou um ponto extra no Combo, o que ele dispara como punições ou recompensas.
-- **`utils.py`**: As mini rotinas de conta matemática pra quebrar as pedras nas quinas pros calculos de geometria.
+- **`config.py`**: Um arquivo com as configurações gerais do jogo.
+- **`game.py`**: É responsável pela exibição da interface do jogo.
+- **`main.py`**: O inicializador do Python, responsável por rodar o jogo.
+- **`sprites.py`**: As identidades dos elementos do jogo (Nave, Meteoros, Bolinhas Azuis/Verde, Tiros) estão configuradas nele com as animações.
+- **`systems.py`**: As mecânicas do jogo. Responsável por fazer os cálculos e definir toda hora que a Nave esbarrou no Asteroide vermelho ou tomou um ponto extra no Combo, o que ele dispara como punições ou recompensas.
+- **`utils.py`**: Arquivo de utilidades para operações matemáticas e geométricas.
