@@ -21,7 +21,9 @@ class World:
         self.asteroids = pg.sprite.Group()
         self.ufos = pg.sprite.Group()
         self.powerups = pg.sprite.Group()
+        self.anomalies = pg.sprite.Group()
         self.all_sprites = pg.sprite.Group(self.ship)
+        self.anomaly_timer = uniform(15.0, 30.0)
         self.combo = 0
         self.combo_timer = 0.0
         self.dash_uses = 0
@@ -112,6 +114,20 @@ class World:
             self.spawn_ufo()
             self.ufo_timer = C.UFO_SPAWN_EVERY
 
+        # Gravity logic
+        for anomaly in self.anomalies:
+            for spr in list(self.all_sprites):
+                if spr == anomaly:
+                    continue
+                diff = anomaly.pos - spr.pos
+                dist_sq = diff.length_squared()
+                if dist_sq > 0:
+                    # O poder gravitacional escala de acordo com o tamanho atual da anomalia
+                    scale_factor = anomaly.r / 10.0
+                    force = (C.ANOMALY_GRAVITY_PULL * scale_factor) / dist_sq
+                    if hasattr(spr, "vel"):
+                        spr.vel += diff.normalize() * force * dt
+
         self.handle_collisions()
 
         if not self.asteroids and self.wave_cool <= 0:
@@ -119,6 +135,15 @@ class World:
             self.wave_cool = C.WAVE_DELAY
         elif not self.asteroids:
             self.wave_cool -= dt
+            
+        if self.wave >= C.ANOMALY_SPAWN_WAVE:
+            self.anomaly_timer -= dt
+            if self.anomaly_timer <= 0:
+                pos = Vec(uniform(200, C.WIDTH-200), uniform(200, C.HEIGHT-200))
+                an = Anomaly(pos)
+                self.anomalies.add(an)
+                self.all_sprites.add(an)
+                self.anomaly_timer = uniform(15.0, 30.0)
 
     def handle_collisions(self):
         # PowerUp collisions with ship
@@ -130,6 +155,26 @@ class World:
                     elif p.type == "SPREAD":
                         self.ship.spread_timer = C.POWERUP_SPREAD_DURATION
                     p.kill()
+
+        # Anomaly eating logic
+        for anomaly in list(self.anomalies):
+            if not anomaly.alive():
+                continue
+            for spr in list(self.all_sprites):
+                if spr == anomaly:
+                    continue
+                if (spr.pos - anomaly.pos).length() < anomaly.r:
+                    if spr == self.ship:
+                        hit = True
+                        if self.ship.has_shield:
+                            self.ship.has_shield = False
+                            self.ship.invuln = 1.0
+                            # Jump slightly away to not get stuck
+                            self.ship.pos += (self.ship.pos - anomaly.pos).normalize() * 50
+                        else:
+                            self.ship_die()
+                    elif not isinstance(spr, Anomaly):
+                        spr.kill()
 
         # Resolve collisions between bullets, asteroids, UFOs, and the ship.
         hits = pg.sprite.groupcollide(
@@ -176,7 +221,6 @@ class World:
                     self.ship.invuln = 1.0
                 else:
                     self.ship_die()
-                    break
 
         for ufo in list(self.ufos):
             for b in list(self.bullets):

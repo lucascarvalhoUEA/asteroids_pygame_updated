@@ -270,3 +270,37 @@ class PowerUp(pg.sprite.Sprite):
         pg.draw.circle(surf, color, self.pos, self.r, width=2)
 
 
+class Anomaly(pg.sprite.Sprite):
+    def __init__(self, pos: Vec):
+        super().__init__()
+        self.pos = Vec(pos)
+        self.max_r = C.ANOMALY_HORIZON_R
+        self.r = 1.0  # Começa pequena
+        self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        self.time = 0.0
+        self.ttl = 15.0  # Vive por 15 segundos
+
+    def update(self, dt: float):
+        self.time += dt
+        self.ttl -= dt
+        
+        # Cresce lenta e constantemente nos primeiros 8.0 segundos
+        if self.time < 8.0:
+            self.r = 1.0 + (self.max_r - 1.0) * (self.time / 8.0)
+        # Encolhe suavemente no último 1 segundo
+        elif self.ttl < 1.0:
+            self.r = max(0.1, self.max_r * self.ttl)
+        else:
+            self.r = self.max_r
+            
+        if self.ttl <= 0:
+            self.kill()
+            
+        self.rect.width = self.r * 2
+        self.rect.height = self.r * 2
+        self.rect.center = self.pos
+
+    def draw(self, surf: pg.Surface):
+        if self.r > 2.0:
+            r_pulse = self.r + math.sin(self.time * 5.0) * 3.0
+            pg.draw.circle(surf, C.PURPLE, self.pos, max(1, int(r_pulse)), width=2)
