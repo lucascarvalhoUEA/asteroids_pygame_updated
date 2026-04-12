@@ -3,7 +3,7 @@
 # This file defines the interactive game entities and their local behaviors.
 
 import math
-from random import uniform
+from random import random, uniform, choice
 
 import pygame as pg
 
@@ -67,6 +67,7 @@ class Asteroid(pg.sprite.Sprite):
         self.vel = Vec(vel)
         self.size = size
         self.r = C.AST_SIZES[size]["r"]
+        self.volatile = random() < C.VOLATILE_CHANCE
         self.poly = self._make_poly()
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
 
@@ -92,7 +93,8 @@ class Asteroid(pg.sprite.Sprite):
     def draw(self, surf: pg.Surface):
         # Draw the asteroid outline on the target surface.
         pts = [(self.pos + p) for p in self.poly]
-        pg.draw.polygon(surf, C.WHITE, pts, width=1)
+        color = C.RED if getattr(self, "volatile", False) else C.WHITE
+        pg.draw.polygon(surf, color, pts, width=1)
 
 
 class Ship(pg.sprite.Sprite):

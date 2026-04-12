@@ -3,7 +3,7 @@
 # This file coordinates world state, spawning, collisions, scoring, and progression.
 
 import math
-from random import uniform
+from random import uniform, random, choice
 
 import pygame as pg
 
@@ -177,11 +177,18 @@ class World:
         self.score += C.AST_SIZES[ast.size]["score"] * multiplier
         split = C.AST_SIZES[ast.size]["split"]
         pos = Vec(ast.pos)
-        ast.kill()
-        for s in split:
-            dirv = rand_unit_vec()
-            speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
-            self.spawn_asteroid(pos, dirv * speed, s)
+        
+        if getattr(ast, "volatile", False):
+            for _ in range(C.VOLATILE_PROJECTIONS):
+                dirv = rand_unit_vec()
+                b = UfoBullet(pos, dirv * C.VOLATILE_PROJ_SPEED)
+                self.ufo_bullets.add(b)
+                self.all_sprites.add(b)
+        else:
+            for s in split:
+                dirv = rand_unit_vec()
+                speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
+                self.spawn_asteroid(pos, dirv * speed, s)
 
     def ship_die(self):
         # Remove uma vida; sinaliza game over ou reposiciona a nave.
