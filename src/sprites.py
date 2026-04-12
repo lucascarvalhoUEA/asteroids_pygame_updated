@@ -107,6 +107,10 @@ class Ship(pg.sprite.Sprite):
         self.alive = True
         self.r = C.SHIP_RADIUS
         self.rect = pg.Rect(0, 0, self.r * 2, self.r * 2)
+        
+        # New mechanics
+        self.dash_cool = 0.0
+        self.dash_active = 0.0
 
     def control(self, keys: pg.key.ScancodeWrapper, dt: float):
         # Apply rotation, thrust, and friction from the current input state.
@@ -128,11 +132,18 @@ class Ship(pg.sprite.Sprite):
         self.cool = C.SHIP_FIRE_RATE
         return Bullet(pos, vel)
 
-    def hyperspace(self):
-        # Teleport the ship to a random location and reset its momentum.
-        self.pos = Vec(uniform(0, C.WIDTH), uniform(0, C.HEIGHT))
-        self.vel.xy = (0, 0)
-        self.invuln = 1.0
+    def dash(self) -> bool:
+        # Dash forward with invulnerability
+        if self.dash_cool <= 0:
+            self.dash_active = getattr(C, "DASH_DURATION", 0.25)
+            self.dash_cool = getattr(C, "DASH_COOLDOWN", 2.0)
+            dirv = angle_to_vec(self.angle)
+            
+            val_speed = getattr(C, "DASH_SPEED", C.SHIP_THRUST * getattr(C, "DASH_SPEED_MULT", 3.5)) * 1.6
+            self.vel = dirv * val_speed
+            self.invuln = self.dash_active
+            return True
+        return False
 
     def update(self, dt: float):
         # Advance cooldowns, move the ship, and wrap it on screen.
@@ -140,6 +151,18 @@ class Ship(pg.sprite.Sprite):
             self.cool -= dt
         if self.invuln > 0:
             self.invuln -= dt
+            
+        if self.dash_cool > 0:
+            self.dash_cool -= dt
+        if self.dash_active > 0:
+            self.dash_active -= dt
+            if self.dash_active <= 0:
+                # Brake dramatically so we don't crash after dash
+                if self.vel.length() > C.SHIP_THRUST:
+                    self.vel = self.vel.normalize() * (C.SHIP_THRUST * 0.5)
+                # Give a brief invulnerability window after dash ends
+                self.invuln = 0.4
+            
         self.pos += self.vel * dt
         self.pos = wrap_pos(self.pos)
         self.rect.center = self.pos

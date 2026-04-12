@@ -21,6 +21,8 @@ class World:
         self.asteroids = pg.sprite.Group()
         self.ufos = pg.sprite.Group()
         self.all_sprites = pg.sprite.Group(self.ship)
+        self.dash_uses = 0
+        
         self.score = 0
         self.lives = C.START_LIVES
         self.wave = 0
@@ -77,10 +79,13 @@ class World:
             self.bullets.add(b)
             self.all_sprites.add(b)
 
-    def hyperspace(self):
-        # Trigger the ship hyperspace action and apply its score penalty.
-        self.ship.hyperspace()
-        self.score = max(0, self.score - C.HYPERSPACE_COST)
+    def dash(self):
+        # Trigger the directional dash if points available.
+        cost = getattr(C, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
+        if self.score >= cost:
+            if self.ship.dash():
+                self.score -= cost
+                self.dash_uses += 1
 
     def update(self, dt: float, keys):
         # Update the world simulation, timers, enemy behavior, and progression.
@@ -181,5 +186,17 @@ class World:
 
         pg.draw.line(surf, (60, 60, 60), (0, 50), (C.WIDTH, 50), width=1)
         txt = f"SCORE {self.score:06d}   LIVES {self.lives}   WAVE {self.wave}"
+        
+        # Display dash readiness and cost
+        cost = getattr(C, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
+        if self.ship.dash_cool > 0:
+            dash_status = f"{self.ship.dash_cool:.1f}s"
+        elif self.score < cost:
+            dash_status = f"NEED {cost}PTS"
+        else:
+            dash_status = f"READY (-{cost}PTS)"
+            
+        txt += f"   DASH: {dash_status}"
+        
         label = font.render(txt, True, C.WHITE)
         surf.blit(label, (10, 10))
