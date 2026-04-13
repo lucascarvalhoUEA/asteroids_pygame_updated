@@ -40,6 +40,7 @@ class World:
         # Spawn a new asteroid wave with difficulty based on the current round.
         self.wave += 1
         self.ship.has_shield = False
+        self.dash_uses = 0
         count = 3 + self.wave
         for _ in range(count):
             pos = rand_edge_pos()
