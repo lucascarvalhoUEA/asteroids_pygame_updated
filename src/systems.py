@@ -7,7 +7,7 @@ from random import uniform, random, choice
 
 import pygame as pg
 
-import config as C
+import config as config
 from sprites import Asteroid, Ship, UFO, PowerUp, Anomaly, UfoBullet
 from utils import Vec, rand_edge_pos, rand_unit_vec
 
@@ -15,7 +15,7 @@ from utils import Vec, rand_edge_pos, rand_unit_vec
 class World:
     # Initialize the world state, entity groups, timers, and player progress.
     def __init__(self):
-        self.ship = Ship(Vec(C.WIDTH / 2, C.HEIGHT / 2))
+        self.ship = Ship(Vec(config.WIDTH / 2, config.HEIGHT / 2))
         self.bullets = pg.sprite.Group()
         self.ufo_bullets = pg.sprite.Group()
         self.asteroids = pg.sprite.Group()
@@ -29,24 +29,25 @@ class World:
         self.dash_uses = 0
         
         self.score = 0
-        self.lives = C.START_LIVES
+        self.lives = config.START_LIVES
         self.wave = 0
-        self.wave_cool = C.WAVE_DELAY
-        self.safe = C.SAFE_SPAWN_TIME
-        self.ufo_timer = C.UFO_SPAWN_EVERY
+        self.wave_cool = config.WAVE_DELAY
+        self.safe = config.SAFE_SPAWN_TIME
+        self.ufo_timer = config.UFO_SPAWN_EVERY
         self.game_over = False  # Sinaliza fim de jogo para a cena principal
 
     def start_wave(self):
         # Spawn a new asteroid wave with difficulty based on the current round.
         self.wave += 1
         self.ship.has_shield = False
+        self.dash_uses = 0
         count = 3 + self.wave
         for _ in range(count):
             pos = rand_edge_pos()
             while (pos - self.ship.pos).length() < 150:
                 pos = rand_edge_pos()
             ang = uniform(0, math.tau)
-            speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX)
+            speed = uniform(config.AST_VEL_MIN, config.AST_VEL_MAX)
             vel = Vec(math.cos(ang), math.sin(ang)) * speed
             self.spawn_asteroid(pos, vel, "L")
 
@@ -61,8 +62,8 @@ class World:
         if self.ufos:
             return
         small = uniform(0, 1) < 0.5
-        y = uniform(0, C.HEIGHT)
-        x = 0 if uniform(0, 1) < 0.5 else C.WIDTH
+        y = uniform(0, config.HEIGHT)
+        x = 0 if uniform(0, 1) < 0.5 else config.WIDTH
         ufo = UFO(Vec(x, y), small)
         ufo.dir.xy = (1, 0) if x == 0 else (-1, 0)
         self.ufos.add(ufo)
@@ -78,7 +79,7 @@ class World:
 
     def try_fire(self):
         # Fire a player bullet when the bullet cap allows it.
-        if len(self.bullets) >= C.MAX_BULLETS:
+        if len(self.bullets) >= config.MAX_BULLETS:
             return
         bullets = self.ship.fire()
         for b in bullets:
@@ -87,7 +88,7 @@ class World:
 
     def dash(self):
         # Trigger the directional dash if points available.
-        cost = getattr(C, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
+        cost = getattr(config, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
         if self.score >= cost:
             if self.ship.dash():
                 self.score -= cost
@@ -112,7 +113,7 @@ class World:
             self.ufo_timer -= dt
         if not self.ufos and self.ufo_timer <= 0:
             self.spawn_ufo()
-            self.ufo_timer = C.UFO_SPAWN_EVERY
+            self.ufo_timer = config.UFO_SPAWN_EVERY
 
         # Gravity logic
         for anomaly in self.anomalies:
@@ -124,7 +125,7 @@ class World:
                 if dist_sq > 0:
                     # O poder gravitacional escala de acordo com o tamanho atual da anomalia
                     scale_factor = anomaly.r / 10.0
-                    force = (C.ANOMALY_GRAVITY_PULL * scale_factor) / dist_sq
+                    force = (config.ANOMALY_GRAVITY_PULL * scale_factor) / dist_sq
                     if hasattr(spr, "vel"):
                         spr.vel += diff.normalize() * force * dt
 
@@ -132,14 +133,14 @@ class World:
 
         if not self.asteroids and self.wave_cool <= 0:
             self.start_wave()
-            self.wave_cool = C.WAVE_DELAY
+            self.wave_cool = config.WAVE_DELAY
         elif not self.asteroids:
             self.wave_cool -= dt
             
-        if self.wave >= C.ANOMALY_SPAWN_WAVE:
+        if self.wave >= config.ANOMALY_SPAWN_WAVE:
             self.anomaly_timer -= dt
             if self.anomaly_timer <= 0:
-                pos = Vec(uniform(200, C.WIDTH-200), uniform(200, C.HEIGHT-200))
+                pos = Vec(uniform(200, config.WIDTH-200), uniform(200, config.HEIGHT-200))
                 an = Anomaly(pos)
                 self.anomalies.add(an)
                 self.all_sprites.add(an)
@@ -153,7 +154,7 @@ class World:
                     if p.type == "SHIELD":
                         self.ship.has_shield = True
                     elif p.type == "SPREAD":
-                        self.ship.spread_timer = C.POWERUP_SPREAD_DURATION
+                        self.ship.spread_timer = config.POWERUP_SPREAD_DURATION
                     p.kill()
 
         # Anomaly eating logic
@@ -226,11 +227,11 @@ class World:
             for b in list(self.bullets):
                 if (ufo.pos - b.pos).length() < (ufo.r + b.r):
                     self.combo += 1
-                    self.combo_timer = C.COMBO_TIMEOUT
-                    mult = min(self.combo, C.MAX_MULTIPLIER)
+                    self.combo_timer = config.COMBO_TIMEOUT
+                    mult = min(self.combo, config.MAX_MULTIPLIER)
                     
-                    score = (C.UFO_SMALL["score"] if ufo.small
-                             else C.UFO_BIG["score"])
+                    score = (config.UFO_SMALL["score"] if ufo.small
+                             else config.UFO_BIG["score"])
                     self.score += score * mult
                     ufo.kill()
                     b.kill()
@@ -238,26 +239,26 @@ class World:
     def split_asteroid(self, ast: Asteroid):
         # Destroy an asteroid, award score, and spawn its smaller fragments.
         self.combo += 1
-        self.combo_timer = C.COMBO_TIMEOUT
-        multiplier = min(self.combo, C.MAX_MULTIPLIER)
+        self.combo_timer = config.COMBO_TIMEOUT
+        multiplier = min(self.combo, config.MAX_MULTIPLIER)
         
-        self.score += C.AST_SIZES[ast.size]["score"] * multiplier
-        split = C.AST_SIZES[ast.size]["split"]
+        self.score += config.AST_SIZES[ast.size]["score"] * multiplier
+        split = config.AST_SIZES[ast.size]["split"]
         pos = Vec(ast.pos)
         
         if getattr(ast, "volatile", False):
-            for _ in range(C.VOLATILE_PROJECTIONS):
+            for _ in range(config.VOLATILE_PROJECTIONS):
                 dirv = rand_unit_vec()
-                b = UfoBullet(pos, dirv * C.VOLATILE_PROJ_SPEED)
+                b = UfoBullet(pos, dirv * config.VOLATILE_PROJ_SPEED)
                 self.ufo_bullets.add(b)
                 self.all_sprites.add(b)
         else:
             for s in split:
                 dirv = rand_unit_vec()
-                speed = uniform(C.AST_VEL_MIN, C.AST_VEL_MAX) * 1.2
+                speed = uniform(config.AST_VEL_MIN, config.AST_VEL_MAX) * 1.2
                 self.spawn_asteroid(pos, dirv * speed, s)
                 
-        if random() < C.POWERUP_DROP_CHANCE and ast.size == "L":
+        if random() < config.POWERUP_DROP_CHANCE and ast.size == "L":
             p = PowerUp(pos)
             self.powerups.add(p)
             self.all_sprites.add(p)
@@ -270,23 +271,23 @@ class World:
         if self.lives <= 0:
             self.game_over = True  # Game.run() detecta e muda de cena
             return
-        self.ship.pos.xy = (C.WIDTH / 2, C.HEIGHT / 2)
+        self.ship.pos.xy = (config.WIDTH / 2, config.HEIGHT / 2)
         self.ship.vel.xy = (0, 0)
         self.ship.angle = -90
         self.ship.spread_timer = 0.0
-        self.ship.invuln = C.SAFE_SPAWN_TIME
-        self.safe = C.SAFE_SPAWN_TIME
+        self.ship.invuln = config.SAFE_SPAWN_TIME
+        self.safe = config.SAFE_SPAWN_TIME
 
     def draw(self, surf: pg.Surface, font: pg.font.Font):
         # Draw all world entities and the current HUD information.
         for spr in self.all_sprites:
             spr.draw(surf)
 
-        pg.draw.line(surf, (60, 60, 60), (0, 50), (C.WIDTH, 50), width=1)
+        pg.draw.line(surf, (60, 60, 60), (0, 50), (config.WIDTH, 50), width=1)
         txt = f"SCORE {self.score:06d}   LIVES {self.lives}   WAVE {self.wave}"
         
         # Display dash readiness and cost
-        cost = getattr(C, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
+        cost = getattr(config, "DASH_BASE_COST", 50) * (self.dash_uses + 1)
         if self.ship.dash_cool > 0:
             dash_status = f"{self.ship.dash_cool:.1f}s"
         elif self.score < cost:
@@ -297,8 +298,8 @@ class World:
         txt += f"   DASH: {dash_status}"
         
         if self.combo > 1:
-            mult = min(self.combo, C.MAX_MULTIPLIER)
+            mult = min(self.combo, config.MAX_MULTIPLIER)
             txt += f"   COMBO x{mult}"
             
-        label = font.render(txt, True, C.WHITE)
+        label = font.render(txt, True, config.WHITE)
         surf.blit(label, (10, 10))
